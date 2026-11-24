@@ -54,6 +54,7 @@ if 0;
       @{ meta->prop->{plugin_build_cmake}->{args} },
       @cmake_flexiblas_opts,
       (map !$ENV{$_} ? () : "-D$_=$ENV{$_}", 'LAPACK_API_VERSION', map "SYS_${_}_LIBRARY", qw(BLAS LAPACK CBLAS LAPACKE)),
+      '-DCMAKE_INSTALL_NAME_DIR=%{.install.prefix}/lib',
       qw(-S), '%{.install.extract}',
       qw(-B build),
     ],
