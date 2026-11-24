@@ -82,6 +82,35 @@ will use that.  If it cannot be found, the source code will be downloaded
 from the internet and it will be installed in a private share location
 for the use of other modules.
 
+If you build/install the "shared" version, you can set the following
+environment variables, which will be used to set the relevant CMake
+configuration variables as documented in
+L<https://github.com/mpimd-csc/flexiblas/blob/master/INSTALL.md>:
+
+=over
+
+=item *
+
+C<SYS_BLAS_LIBRARY>
+
+=item *
+
+C<SYS_CBLAS_LIBRARY>
+
+=item *
+
+C<SYS_LAPACK_LIBRARY>
+
+=item *
+
+C<LAPACK_API_VERSION>
+
+=item *
+
+C<SYS_LAPACKE_LIBRARY>
+
+=back
+
 =head1 SEE ALSO
 
 =over 4
