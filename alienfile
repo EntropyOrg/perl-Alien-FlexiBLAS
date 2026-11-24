@@ -1,0 +1,62 @@
+use strict;
+use warnings;
+use alienfile;
+
+plugin PkgConfig => 'flexiblas';
+
+share {
+  requires 'Path::Tiny';
+
+  plugin 'Download::GitHub' => (
+    github_user => 'mpimd-csc',
+    github_repo => 'flexiblas',
+    version => qr/([0-9\.]+)/,
+    prefer  => sub {
+      my ($self, $data) = @_;
+      # will only use SHA 9dd056d9a612f430e8a26d0c9e28bc3ad0d15f85 for now
+      my $SHA = '9dd056d9a612f430e8a26d0c9e28bc3ad0d15f85';
+      my ($url_prefix) = $data->{list}[0]{url} =~ m#(.*/)#;
+      @{ $data->{list} } = { filename => $SHA, version => $SHA, url => "$url_prefix$SHA" };
+      $data;
+    }
+  );
+  plugin 'Build::CMake';
+
+# disabled
+  patch sub {
+    Path::Tiny->new("cmake/OpenCVGenPkgconfig.cmake")->edit_utf8(sub {
+      s<
+        \Qif((UNIX AND NOT ANDROID) OR MINGW)\E
+        (
+          \s* [^\n]* \$\{OPENCV_PC_FILE_NAME\} [^\n]*
+        )
+      ><
+      # Always generate the C<.pc> file.
+      'if(OPENCV_GENERATE_PKGCONFIG OR (UNIX AND NOT ANDROID) OR MINGW)'
+      . $1
+      . "\n"
+      # Install the C<pkg-config> C<.pc> file to location that isn't specific to
+      # that of C<< cmake/OpenCVInstallLayout.cmake >>.
+      . 'install(FILES ${CMAKE_BINARY_DIR}/unix-install/${OPENCV_PC_FILE_NAME} DESTINATION share/pkgconfig COMPONENT dev)'
+      >exs
+        or die 'Could not patch OpenCVGenPkgconfig.cmake: pkg-config install rule not found'
+      ;
+    });
+  }
+if 0;
+
+  my @cmake_flexiblas_opts = qw(
+    -DEXAMPLES=OFF
+    -DTESTS=OFF
+  );
+  build [
+    ['%{cmake}',
+      @{ meta->prop->{plugin_build_cmake}->{args} },
+      @cmake_flexiblas_opts,
+      qw(-S), '%{.install.extract}',
+      qw(-B build),
+    ],
+    [ '%{make}', qw( -C build ) ],
+    [ '%{make}', qw( -C build ), 'install' ],
+  ];
+};
