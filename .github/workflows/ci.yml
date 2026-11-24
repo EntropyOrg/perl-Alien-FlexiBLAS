@@ -1,0 +1,115 @@
+name: Run Tests
+
+on:
+  push:
+    branches:
+      - '**'
+  pull_request:
+
+env:
+  PKG_NAME: FlexiBLAS
+  PKG_UBUNTU: libflexiblas-dev
+  PKG_HOMEBREW: flexiblas
+  PKG_MSYS2_MINGW64: mingw-w64-x86_64-flexiblas
+  PKG_MSYS2_MINGW64_DEPS: >-
+    base-devel
+    unzip
+    mingw-w64-x86_64-toolchain
+    mingw-w64-x86_64-perl
+    mingw-w64-x86_64-curl
+    mingw-w64-x86_64-cmake
+    mingw-w64-x86_64-openssl
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        # bash on macos and linux
+        # powershell on windows + strawberry perl
+        # msys2 {0} on windows + msys2
+        shell: >-
+          ${{   fromJSON( '["", "bash {0}"]'       )[ startsWith(matrix.os, 'ubuntu-' ) || startsWith(matrix.os, 'macos-') ]
+          }}${{ fromJSON( '["", "powershell {0}"]' )[ startsWith(matrix.os, 'windows-') && matrix.dist == 'strawberry'     ]
+          }}${{ fromJSON( '["", "msys2 {0}"]'      )[ startsWith(matrix.os, 'windows-') && matrix.dist == 'msys2'          ] }}
+    strategy:
+      fail-fast: false
+      matrix:
+#        os: []
+#        perl-version: []
+#        alien-install-type: []
+        include:
+          # Windows strawberry     | share
+          ## TODO Disable Windows share install for now
+          #- { perl-version: '5.34' , os: windows-latest , dist: strawberry , alien-install-type: 'share'                                  }
+          # Windows msys2          | system, share
+          #- { perl-version: '5.34' , os: windows-latest , dist: msys2      , alien-install-type: 'system'                                 }
+          #- { perl-version: '5.34' , os: windows-latest , dist: msys2      , alien-install-type: 'share'                                  }
+          # macOS                  | system, share
+          - { perl-version: '5.34' , os: macos-latest       ,                alien-install-type: 'system'                                 }
+          #- { perl-version: '5.34' , os: macos-latest       ,                alien-install-type: 'share'                                  }
+    name: Perl ${{ matrix.perl-version }} on ${{ matrix.os }} with install-type ${{ matrix.alien-install-type }}, dist ${{ matrix.dist }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+      # Setup system package
+      - name: Setup system ${{ env.PKG_NAME }} (apt)
+        if: runner.os == 'Linux' && matrix.alien-install-type == 'system'
+        run: |
+          sudo apt-get -y update && sudo apt-get install -y ${{ env.PKG_UBUNTU }}
+      - name: Setup system ${{ env.PKG_NAME }} (homebrew)
+        if: runner.os == 'macOS' && matrix.alien-install-type == 'system'
+        run: |
+          brew install pkgconf ${{ env.PKG_HOMEBREW }}
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        if: runner.os == 'Windows' && matrix.dist == 'msys2'
+        with:
+          update: true
+          install: ${{ env.PKG_MSYS2_MINGW64_DEPS }}
+      - name: Set up ${{ env.PKG_NAME }} (MSYS2/MinGW pacman)
+        if: runner.os == 'Windows' && matrix.dist == 'msys2' && matrix.alien-install-type == 'system'
+        shell: msys2 {0}
+        run: |
+          pacman -S --needed --noconfirm ${{ env.PKG_MSYS2_MINGW64 }}
+      - name: Set up all type build environment variables (MSYS2/MinGW)
+        if: runner.os == 'Windows' && matrix.dist == 'msys2'
+        shell: msys2 {0}
+        run: |
+          echo 'ALIEN_BUILD_PKG_CONFIG=PkgConfig::CommandLine' >> $GITHUB_ENV
+      - name: Set up share build environment variables (MSYS2/MinGW)
+        if: runner.os == 'Windows' && matrix.dist == 'msys2' && matrix.alien-install-type == 'share'
+        shell: msys2 {0}
+        run: |
+          echo "OPENSSL_PREFIX=$(cygpath -m /mingw64)" >> $GITHUB_ENV
+
+      # Setup Perl
+      - name: Set up perl
+        uses: shogo82148/actions-setup-perl@v1
+        if: runner.os != 'Windows'
+        with:
+          perl-version: ${{ matrix.perl-version }}
+      - name: Set up perl (Strawberry)
+        uses: shogo82148/actions-setup-perl@v1
+        if: runner.os == 'Windows' && matrix.dist == 'strawberry'
+        with:
+          distribution: 'strawberry'
+          perl-version: ${{ matrix.perl-version }}
+
+      - run: perl -V
+      - name: Install cpanm
+        if: runner.os == 'Windows' && matrix.dist == 'msys2'
+        run:
+          yes | cpan -T App::cpanminus || true
+
+      - name: Install Perl deps
+        run: |
+          cpanm --notest --installdeps --with-configure .
+
+      - name: Run tests
+        env:
+          ALIEN_BUILD_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ALIEN_INSTALL_TYPE: ${{ matrix.alien-install-type }}
+        run: |
+          cpanm --verbose --test-only .
