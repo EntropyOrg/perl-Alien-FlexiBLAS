@@ -9,12 +9,15 @@ on:
 env:
   PKG_NAME: FlexiBLAS
   PKG_UBUNTU: libflexiblas-dev
+  PKG_UBUNTU_SHARE: gfortran
   PKG_HOMEBREW: flexiblas
+  PKG_HOMEBREW_SHARE: gfortran
   PKG_MSYS2_MINGW64: mingw-w64-x86_64-flexiblas
   PKG_MSYS2_MINGW64_DEPS: >-
     base-devel
     unzip
     mingw-w64-x86_64-toolchain
+    mingw-w64-x86_64-gcc-fortran
     mingw-w64-x86_64-perl
     mingw-w64-x86_64-curl
     mingw-w64-x86_64-cmake
@@ -58,10 +61,18 @@ jobs:
         if: runner.os == 'Linux' && matrix.alien-install-type == 'system'
         run: |
           sudo apt-get -y update && sudo apt-get install -y ${{ env.PKG_UBUNTU }}
+      - name: Setup share ${{ env.PKG_NAME }} (apt)
+        if: runner.os == 'Linux' && matrix.alien-install-type == 'share'
+        run: |
+          sudo apt-get -y update && sudo apt-get install -y ${{ env.PKG_UBUNTU_SHARE }}
       - name: Setup system ${{ env.PKG_NAME }} (homebrew)
         if: runner.os == 'macOS' && matrix.alien-install-type == 'system'
         run: |
-          brew install pkgconf ${{ env.PKG_HOMEBREW }}
+          brew install ${{ env.PKG_HOMEBREW }}
+      - name: Setup share ${{ env.PKG_NAME }} (homebrew)
+        if: runner.os == 'macOS' && matrix.alien-install-type == 'share'
+        run: |
+          brew install ${{ env.PKG_HOMEBREW_SHARE }}
       - name: Set up MSYS2
         uses: msys2/setup-msys2@v2
         if: runner.os == 'Windows' && matrix.dist == 'msys2'
